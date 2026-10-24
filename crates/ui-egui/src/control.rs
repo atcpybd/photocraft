@@ -402,6 +402,18 @@ fn context_entries(app: &PhotocraftApp, menu: &crate::canvas_tool_menu::CanvasTo
 }
 
 fn dispatch(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    // Provider destinations/keys and image-upload consent are native-user settings. Synthetic
+    // input is queued for later frames, so refuse it here as well as at dialog confirmation.
+    let configuring_ai = app.ui.dialogs.iter().any(|d| d.fields.contains_key("__genaiSettings") || d.fields.contains_key("__genaiProvider"));
+    if configuring_ai
+        && matches!(
+            req.method.as_str(),
+            "ui.pointer" | "ui.click" | "ui.move" | "ui.key" | "ui.type" | "ui.dialog.set" | "ui.dialog.confirm" | "ui.dialog.apply"
+        )
+    {
+        return err("Configure AI providers and automation consent directly in the app; automated settings changes are disabled");
+    }
+
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     let u = |k: &str| p.get(k).and_then(Value::as_u64);
@@ -1448,6 +1460,25 @@ mod tests {
             Outcome::Done(v) => v,
             _ => panic!("{method}: expected an immediate reply"),
         }
+    }
+
+    #[test]
+    fn custom_ai_settings_cannot_be_changed_by_control_input() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        let id = crate::genai_ui::open_settings(&mut app);
+        for method in ["ui.pointer", "ui.key", "ui.type", "ui.dialog.set", "ui.dialog.confirm", "ui.dialog.apply"] {
+            assert_eq!(call(&mut app, &ctx, method, json!({"dialog":id,"field":"allowAutomation","value":true}))["ok"], false, "{method}");
+        }
+        for method in ["ui.click", "ui.move"] {
+            let result = call(&mut app, &ctx, method, json!({"x":10,"y":10}));
+            assert_eq!(result["ok"], false, "{method}");
+            assert!(app.synthetic.is_empty(), "settings input must never reach a later frame");
+        }
+        for marker in ["__genaiSettings", "__genaiPrompt", "__genaiProvider", "__genaiOperation"] {
+            assert!(crate::dialogs::is_route_marker(marker));
+        }
+        assert_eq!(call(&mut app, &ctx, "ui.dialog.cancel", json!({"dialog":id}))["ok"], true);
     }
 
     #[test]

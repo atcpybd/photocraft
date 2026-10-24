@@ -259,6 +259,7 @@ fn file_error(operation: &str, path: &str, error: std::io::Error) -> AutomationE
 /// directory capabilities. Automation must use `doc.open`, `doc.save` and
 /// `doc.render` for file effects until those commands are migrated.
 pub fn authorize_engine_command(id: &str, params: &Value) -> Result<(), AutomationError> {
+    // The engine checks the session's explicit AI automation consent before dispatch.
     let safe_file_command = matches!(
         id,
         "file.new"
@@ -386,7 +387,7 @@ fn preference_uses_ambient_filesystem(path: &str) -> bool {
     let mut segments = path.split('.').filter(|segment| !segment.is_empty());
     let Some(section) = segments.next() else { return true };
     // File Handling's LUT folder (#6558) is listed from disk; the rest of that section is not.
-    matches!(section, "colorSettings" | "scriptEvents" | "historyLog" | "plugIns" | "scratchDisks")
+    matches!(section, "dialogs" | "colorSettings" | "scriptEvents" | "historyLog" | "plugIns" | "scratchDisks")
         || (section == "fileHandling" && segments.next().is_none_or(|key| key == "lutFolder"))
 }
 
@@ -794,6 +795,11 @@ mod tests {
         assert!(authorize_engine_command("prefs.set", &serde_json::json!({"path": "colorSettings.workingRgb", "value": "outside.icc"})).is_err());
         assert!(authorize_engine_step("file.open", &serde_json::json!({})).is_err());
         assert!(authorize_engine_step("actions.play", &serde_json::json!({})).is_ok());
+        // Upload consent belongs to the session, where native-user preferences are available.
+        for id in ["edit.generativeFill", "layer.generative.more", "image.generateImage", "edit.generativeExpand", "layer.aiSeamlessBlend"] {
+            assert!(authorize_desktop_engine_command(id, &serde_json::json!({})).is_ok(), "{id}");
+            assert!(authorize_engine_step(id, &serde_json::json!({})).is_ok(), "{id}");
+        }
         // An allowed command can't reach a denied one by running it on its own behalf.
         let mut session = photocraft_engine::Session::new();
         session.execute("file.new", serde_json::json!({"width": 4, "height": 4})).unwrap();
@@ -803,6 +809,22 @@ mod tests {
         assert!(session.execute("file.automate.conditionalModeChange", params).is_err());
         assert_eq!(session.active().unwrap().doc.mode, photocraft_engine::doc::ColorMode::Rgb);
         assert!(authorize_desktop_engine_step("file.saveACopy", &serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn desktop_ai_consent_is_enforced_by_the_session_and_cannot_be_self_granted() {
+        let mut session = photocraft_engine::Session::new();
+        session.authorize = Some(authorize_desktop_engine_step);
+        let ids = ["edit.generativeFill", "layer.generative.more", "image.generateImage", "edit.generativeExpand", "layer.aiSeamlessBlend"];
+        for id in ids {
+            let error = session.execute(id, serde_json::json!({"prompt":"test"})).unwrap_err().to_string();
+            assert!(error.contains("AI requests from automation are disabled"), "{id}: {error}");
+        }
+        assert!(session.execute("prefs.set", serde_json::json!({"path":"dialogs.customAi.allowAutomation","value":true})).is_err());
+        session.prefs.edit(|p| p.dialogs.insert("customAi".into(), serde_json::json!({"allowAutomation":true})));
+        for id in ids {
+            assert!(photocraft_engine::custom_ai_policy::authorize(&session, id).is_ok(), "{id}");
+        }
     }
 
     #[test]

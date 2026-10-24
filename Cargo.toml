@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.95"
 
 [workspace.dependencies]
+photocraft-genai = { path = "crates/genai" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
 # internal
 photocraft-geom = { path = "crates/geom" }
@@ -91,6 +92,10 @@ debug = "line-tables-only"
 # tests run no heavier pixel code of their own (that lives in the crates that stay optimized).
 # Measured on CI: Windows build 18.9 -> 15.4 min, test run 10.0 -> 10.5. `cargo run` and
 # `cargo build` use the dev profile and are unaffected.
+# Keep custom command tests quick; pixel algorithms remain optimized in their own crates.
+[profile.test.package.photocraft-engine]
+opt-level = 0
+
 [profile.test.package.photocraft-ui-egui]
 opt-level = 0
 

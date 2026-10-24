@@ -757,6 +757,7 @@ impl Session {
         // Untrusted sessions gate every command, including the ones a command runs on its own
         // behalf (`file.automate.conditionalModeChange` runs `image.mode.*`), before any side
         // effect.
+        crate::custom_ai_policy::authorize(self, id)?;
         if let Some(gate) = self.authorize {
             gate(id, &params)?;
         }

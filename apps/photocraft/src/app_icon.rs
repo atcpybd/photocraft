@@ -1,6 +1,6 @@
 //! The app icon, everywhere Windows, macOS and Linux show one (#248).
 //!
-//! - **Executable:** `build.rs` embeds `assets/app-icon/photocraft.ico` (16–256 px) as icon
+//! - **Executable:** `build.rs` embeds `assets/custom-ai/custom-ai.ico` (16–256 px) as icon
 //!   resource 1, which Explorer, Alt+Tab and an unpinned taskbar button fall back to.
 //! - **Window:** [`window_icon`] sets the title-bar and taskbar icon at runtime (`WM_SETICON` on
 //!   Windows, `_NET_WM_ICON` on X11, the Dock when running unbundled on macOS).
@@ -53,15 +53,15 @@ fn in_app_bundle(exe: &std::path::Path) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-const PNG: &[u8] = include_bytes!("../../../assets/app-icon/photocraft-1024.png");
+const PNG: &[u8] = include_bytes!("../../../assets/custom-ai/icon-1024.png");
 #[cfg(not(target_os = "macos"))]
-const PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.photocraft.png");
+const PNG: &[u8] = include_bytes!("../../../assets/custom-ai/icon-256.png");
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const ICO: &[u8] = include_bytes!("../../../assets/app-icon/photocraft.ico");
+    const ICO: &[u8] = include_bytes!("../../../assets/custom-ai/custom-ai.ico");
     const WXS: &str = include_str!("../../../packaging/windows/photocraft.wxs");
 
     fn u16_at(b: &[u8], i: usize) -> usize {

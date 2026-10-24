@@ -6,7 +6,7 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../../assets/app-icon/photocraft.ico");
+    println!("cargo:rerun-if-changed=../../assets/custom-ai/custom-ai.ico");
     println!("cargo:rerun-if-env-changed=PHOTOCRAFT_REQUIRE_WINRES");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
@@ -20,10 +20,10 @@ fn main() {
         println!("cargo:rustc-link-arg-bins=delayimp.lib");
     }
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../../assets/app-icon/photocraft.ico")
+    res.set_icon("../../assets/custom-ai/custom-ai.ico")
         .set("ProductName", "PhotoCraft")
-        .set("FileDescription", "PhotoCraft image editor")
-        .set("CompanyName", "Learning Machines LLC")
+        .set("FileDescription", "PhotoCraft Custom AI image editor")
+        .set("CompanyName", "Personal custom build based on PhotoCraft")
         .set("LegalCopyright", "Copyright (c) the PhotoCraft authors. MIT OR Apache-2.0.")
         .set("OriginalFilename", "photocraft.exe")
         .set("InternalName", "photocraft");

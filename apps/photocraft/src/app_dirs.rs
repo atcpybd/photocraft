@@ -7,8 +7,8 @@
 //!    everything in `<exe dir>/PhotoCraftData`, so a portable copy on a USB stick leaves nothing in
 //!    `%APPDATA%`. The Windows portable zip ships with `portable.txt`; the MSI doesn't. If that
 //!    folder can't be written (read-only medium, Program Files), the app warns and falls back.
-//! 3. The platform convention: macOS `~/Library/Application Support/Photocraft`, Windows
-//!    `%APPDATA%\Photocraft`, Linux `$XDG_CONFIG_HOME/photocraft` or `~/.config/photocraft`.
+//! 3. The platform convention: macOS `~/Library/Application Support/PhotoCraftCustomAI`, Windows
+//!    `%APPDATA%\PhotoCraftCustomAI`, Linux `$XDG_CONFIG_HOME/photocraft-custom-ai` or `~/.config/photocraft-custom-ai`.
 //!
 //! One exception: the platform convention keeps crash-recovery autosaves out of what is synced
 //! with the settings: the Windows roaming profile and the Linux config folder ([`recovery_dir`]).
@@ -79,13 +79,13 @@ pub fn recovery_dir() -> Option<PathBuf> {
 
 /// The recovery folder for `data`. Autosaves hold whole documents and are rewritten every few
 /// minutes, so with the platform convention they stay out of what is synced with the settings:
-/// - Windows (#5648): the machine-local `%LOCALAPPDATA%\Photocraft\Recovery`; the roaming
+/// - Windows (#5648): the machine-local `%LOCALAPPDATA%\PhotoCraftCustomAI\Recovery`; the roaming
 ///   `%APPDATA%` may be synced at sign-in and sign-out or capped by policy.
-/// - Linux and other XDG systems (#6612): `$XDG_STATE_HOME/photocraft/Recovery`, by default
-///   `~/.local/state/photocraft/Recovery`, where the XDG Base Directory spec puts state that
+/// - Linux and other XDG systems (#6612): `$XDG_STATE_HOME/photocraft-custom-ai/Recovery`, by default
+///   `~/.local/state/photocraft-custom-ai/Recovery`, where the XDG Base Directory spec puts state that
 ///   should outlive a restart but isn't configuration; dotfile managers and config sync often copy
 ///   `~/.config` whole. As the spec asks, a relative `XDG_STATE_HOME` is ignored.
-/// - macOS: `~/Library/Application Support/Photocraft/Recovery` as before. Apple's guidelines put
+/// - macOS: `~/Library/Application Support/PhotoCraftCustomAI/Recovery` as before. Apple's guidelines put
 ///   app-created data that can't be regenerated there; `~/Library/Caches` may be purged by the
 ///   system.
 ///
@@ -95,7 +95,7 @@ pub fn resolve_recovery(data: &DataDir, env: impl Fn(&str) -> Option<OsString>) 
     if data.mode == Mode::Platform {
         if cfg!(windows) {
             if let Some(local) = env("LOCALAPPDATA").filter(|l| !l.is_empty()) {
-                return Some(PathBuf::from(local).join("Photocraft").join(RECOVERY));
+                return Some(PathBuf::from(local).join("PhotoCraftCustomAI").join(RECOVERY));
             }
         } else if !cfg!(target_os = "macos") {
             let state = env("XDG_STATE_HOME")
@@ -103,7 +103,7 @@ pub fn resolve_recovery(data: &DataDir, env: impl Fn(&str) -> Option<OsString>) 
                 .filter(|s| s.is_absolute())
                 .or_else(|| env("HOME").filter(|h| !h.is_empty()).map(|h| PathBuf::from(h).join(".local").join("state")));
             if let Some(state) = state {
-                return Some(state.join("photocraft").join(RECOVERY));
+                return Some(state.join("photocraft-custom-ai").join(RECOVERY));
             }
         }
     }
@@ -478,12 +478,12 @@ pub fn resolve(env: impl Fn(&str) -> Option<OsString>, exe_dir: Option<&Path>) -
 pub fn platform_dir(env: &impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     let home = env("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
     if cfg!(target_os = "macos") {
-        return home.map(|h| h.join("Library/Application Support/Photocraft"));
+        return home.map(|h| h.join("Library/Application Support/PhotoCraftCustomAI"));
     }
     if cfg!(windows) {
-        return env("APPDATA").filter(|a| !a.is_empty()).map(|a| PathBuf::from(a).join("Photocraft"));
+        return env("APPDATA").filter(|a| !a.is_empty()).map(|a| PathBuf::from(a).join("PhotoCraftCustomAI"));
     }
-    env("XDG_CONFIG_HOME").filter(|x| !x.is_empty()).map(PathBuf::from).or_else(|| home.map(|h| h.join(".config"))).map(|c| c.join("photocraft"))
+    env("XDG_CONFIG_HOME").filter(|x| !x.is_empty()).map(PathBuf::from).or_else(|| home.map(|h| h.join(".config"))).map(|c| c.join("photocraft-custom-ai"))
 }
 
 /// The first portable marker file in `exe_dir`, if any.
@@ -506,6 +506,20 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn custom_build_never_uses_the_upstream_platform_directory() {
+        let root = PathBuf::from("C:/custom-ai-isolation-fixture");
+        let platform = platform_dir(&env_of(&[("HOME", &root), ("APPDATA", &root), ("XDG_CONFIG_HOME", &root)]));
+        let path = platform.unwrap();
+        assert!(matches!(path.file_name().and_then(|n| n.to_str()), Some("PhotoCraftCustomAI" | "photocraft-custom-ai")), "{path:?}");
+        let data = DataDir { dir: Some(path), mode: Mode::Platform, warning: None };
+        let recovery = resolve_recovery(&data, env_of(&[("HOME", &root), ("LOCALAPPDATA", &root), ("XDG_STATE_HOME", &root)])).unwrap();
+        assert!(
+            matches!(recovery.parent().and_then(Path::file_name).and_then(|n| n.to_str()), Some("PhotoCraftCustomAI" | "photocraft-custom-ai")),
+            "{recovery:?}"
+        );
+    }
 
     fn temp(tag: &str) -> PathBuf {
         static N: AtomicUsize = AtomicUsize::new(0);
@@ -542,11 +556,11 @@ mod tests {
         assert!(!exe.join(PORTABLE_DATA_DIR).exists(), "no portable folder without a marker");
         // The convention per platform.
         if cfg!(target_os = "macos") {
-            assert_eq!(dir, root.join("home/Library/Application Support/Photocraft"));
+            assert_eq!(dir, root.join("home/Library/Application Support/PhotoCraftCustomAI"));
         } else if cfg!(windows) {
-            assert_eq!(dir, root.join("appdata").join("Photocraft"));
+            assert_eq!(dir, root.join("appdata").join("PhotoCraftCustomAI"));
         } else {
-            assert_eq!(dir, root.join("home/.config/photocraft"));
+            assert_eq!(dir, root.join("home/.config/photocraft-custom-ai"));
         }
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -621,11 +635,11 @@ mod tests {
     #[test]
     fn autosaves_stay_out_of_the_roaming_profile() {
         let root = temp("recovery-local");
-        let settings = root.join("appdata").join("Photocraft");
+        let settings = root.join("appdata").join("PhotoCraftCustomAI");
         let local = root.join("local");
         let env = env_of(&[("LOCALAPPDATA", &local)]);
         let platform = DataDir { dir: Some(settings.clone()), mode: Mode::Platform, warning: None };
-        let expected = if cfg!(windows) { local.join("Photocraft").join("Recovery") } else { settings.join("Recovery") };
+        let expected = if cfg!(windows) { local.join("PhotoCraftCustomAI").join("Recovery") } else { settings.join("Recovery") };
         assert_eq!(resolve_recovery(&platform, &env), Some(expected));
         for mode in [Mode::Override, Mode::Portable] {
             let d = DataDir { dir: Some(settings.clone()), mode, warning: None };
@@ -646,14 +660,17 @@ mod tests {
     #[test]
     fn autosaves_go_to_the_xdg_state_folder() {
         let root = temp("recovery-xdg");
-        let settings = root.join("home").join(".config").join("photocraft");
+        let settings = root.join("home").join(".config").join("photocraft-custom-ai");
         let home = root.join("home");
         let state = root.join("state");
         let platform = DataDir { dir: Some(settings.clone()), mode: Mode::Platform, warning: None };
         let xdg = !cfg!(windows) && !cfg!(target_os = "macos");
         let expect = |xdg_path: PathBuf| Some(if xdg { xdg_path } else { settings.join("Recovery") });
-        assert_eq!(resolve_recovery(&platform, env_of(&[("XDG_STATE_HOME", &state), ("HOME", &home)])), expect(state.join("photocraft").join("Recovery")));
-        let default = home.join(".local").join("state").join("photocraft").join("Recovery");
+        assert_eq!(
+            resolve_recovery(&platform, env_of(&[("XDG_STATE_HOME", &state), ("HOME", &home)])),
+            expect(state.join("photocraft-custom-ai").join("Recovery"))
+        );
+        let default = home.join(".local").join("state").join("photocraft-custom-ai").join("Recovery");
         assert_eq!(resolve_recovery(&platform, env_of(&[("HOME", &home)])), expect(default.clone()));
         let relative = PathBuf::from("relative/state");
         assert_eq!(resolve_recovery(&platform, env_of(&[("XDG_STATE_HOME", &relative), ("HOME", &home)])), expect(default.clone()));
@@ -679,7 +696,7 @@ mod tests {
     fn autosaves_from_the_old_folder_move_to_the_new_one() {
         let root = temp("recovery-move");
         let legacy = root.join("roaming").join("Recovery");
-        let dir = root.join("local").join("Photocraft").join("Recovery");
+        let dir = root.join("local").join("PhotoCraftCustomAI").join("Recovery");
         autosave(&legacy, "a");
         assert_eq!(adopt_legacy_recovery(&legacy, &dir), dir);
         assert!(!legacy.exists(), "the old folder is gone");

@@ -144,6 +144,9 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
         return r;
     }
     // Filter › Plug-ins (installed WebAssembly plug-ins, Install Plug-in…).
+    if let Some(r) = crate::genai_ui::menu(app, id, &params) {
+        return r;
+    }
     if let Some(r) = crate::plugin_ui::menu(app, id, &params) {
         return r;
     }
@@ -1109,6 +1112,9 @@ pub fn menu_items(app: &PhotocraftApp) -> Vec<MenuItem> {
                 it.shortcut = prefs.shortcut(&it.id, None).map(str::to_string);
             }
         }
+    }
+    if !crate::genai_ui::menu_visible(app) {
+        items.retain(|i| i.id != photocraft_engine::genai_cmds::FILL);
     }
     if !prefs.menus.hidden.is_empty() {
         items.retain(|i| !prefs.menus.is_hidden(&i.id));

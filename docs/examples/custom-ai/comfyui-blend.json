@@ -1,0 +1,139 @@
+{
+  "endpoint": "http://127.0.0.1:8188",
+  "workflow": {
+    "4": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "your-installed-checkpoint.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "Preserve the subject identity, shape and position. Match the background lighting, colors and perspective, soften cutout edges and add a natural contact shadow.",
+        "clip": [
+          "4",
+          1
+        ]
+      }
+    },
+    "7": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "",
+        "clip": [
+          "4",
+          1
+        ]
+      }
+    },
+    "10": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "example.png"
+      }
+    },
+    "11": {
+      "class_type": "LoadImageMask",
+      "inputs": {
+        "image": "example-mask.png",
+        "channel": "red"
+      }
+    },
+    "12": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "10",
+          0
+        ],
+        "vae": [
+          "4",
+          2
+        ]
+      }
+    },
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": 1,
+        "steps": 20,
+        "cfg": 7,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "denoise": 0.35,
+        "model": [
+          "4",
+          0
+        ],
+        "positive": [
+          "6",
+          0
+        ],
+        "negative": [
+          "7",
+          0
+        ],
+        "latent_image": [
+          "13",
+          0
+        ]
+      }
+    },
+    "8": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "3",
+          0
+        ],
+        "vae": [
+          "4",
+          2
+        ]
+      }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "8",
+          0
+        ],
+        "filename_prefix": "PhotoCraft"
+      }
+    },
+    "13": {
+      "class_type": "SetLatentNoiseMask",
+      "inputs": {
+        "samples": [
+          "12",
+          0
+        ],
+        "mask": [
+          "11",
+          0
+        ]
+      }
+    }
+  },
+  "mappings": {
+    "prompt": {
+      "node": "6",
+      "input": "text"
+    },
+    "image": {
+      "node": "10",
+      "input": "image"
+    },
+    "mask": {
+      "node": "11",
+      "input": "image"
+    },
+    "seed": {
+      "node": "3",
+      "input": "seed"
+    },
+    "output": "9"
+  }
+}

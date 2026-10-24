@@ -32,6 +32,7 @@ pub mod commands;
 pub mod comps_cmds;
 pub mod contour_lib_cmds;
 mod crop_fill;
+pub mod custom_ai_policy;
 pub mod cutout_cmds;
 pub mod display_color;
 pub mod distort_cmds;
@@ -54,6 +55,7 @@ mod frame_cmds;
 pub mod fx_view_cmds;
 pub mod fx_visibility_cmds;
 pub mod gallery_cmds;
+pub mod genai_cmds;
 pub mod gradient_fill_cmds;
 pub mod group_view_cmds;
 pub mod guide_layout;
@@ -540,6 +542,8 @@ pub struct Session {
     /// A finished live stroke offered to the `paint.stroke` / `paint.pencil` that commits it
     /// ([`Session::offer_live_stroke`]).
     pub(crate) live_commit: Option<brush_cmds::LiveCommit>,
+    genai: genai_cmds::Providers,
+    genai_sources: std::collections::HashMap<LayerId, std::sync::Arc<genai_cmds::Source>>,
     /// Documents a background open decoded but held back until the user answers the profile
     /// prompt ([`ColorState::open_question`](color_cmds::ColorState::open_question)): `(id,
     /// document, source read-only)`. The shell takes them with [`Session::take_held_open`].

@@ -263,13 +263,17 @@ pub struct GenerateRequest {
 
 /// Change the masked part of `image` (Generative Fill). The engine sends `image` with the masked
 /// area already cleared to flat grey, so the provider fills a hole rather than repainting what
-/// was there. An empty prompt asks it to continue the surroundings through the hole.
+/// was there, unless `preserve_source` is set. An empty prompt asks it to continue the
+/// surroundings through the hole.
 #[derive(Debug, Clone, Default)]
 pub struct EditRequest {
     pub image: Vec<u8>,
     pub mask: Vec<u8>,
     pub prompt: String,
     pub size: ImageSize,
+    /// False for a cleared Generative Fill hole; true when source content is kept for
+    /// harmonization or canvas expansion. Instruction-driven providers must preserve it.
+    pub preserve_source: bool,
     /// The engine sets it from the job; the default never cancels.
     pub cancel: CancelToken,
 }
@@ -315,6 +319,14 @@ pub trait ImageProvider: Send + Sync {
     }
     fn generate(&self, _request: &GenerateRequest) -> Result<GeneratedImage> {
         Err(GenError::Unsupported(self.info().name))
+    }
+    /// Text-to-image with cancellation. Synchronous services finish an in-flight request
+    /// and discard its result; polling services can override this to cancel queued work.
+    fn generate_cancellable(&self, request: &GenerateRequest, cancel: CancelToken) -> Result<GeneratedImage> {
+        cancel.check()?;
+        let result = self.generate(request);
+        cancel.check()?;
+        result
     }
     fn edit(&self, _request: &EditRequest) -> Result<GeneratedImage> {
         Err(GenError::Unsupported(self.info().name))
@@ -448,6 +460,41 @@ mod tests {
         assert_eq!(t.check(), Err(GenError::Cancelled));
         assert!(!CancelToken::default().is_cancelled());
         assert_eq!(format!("{:?}", EditRequest::default().cancel), "CancelToken");
+    }
+
+    #[test]
+    fn cancellable_generation_default_checks_before_and_after_a_synchronous_call() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        };
+        struct Synchronous {
+            cancelled: Arc<AtomicBool>,
+            calls: AtomicUsize,
+            fail: bool,
+        }
+        impl ImageProvider for Synchronous {
+            fn info(&self) -> ProviderInfo {
+                ProviderInfo { id: "test", name: "test", model: "test".into(), host: "test" }
+            }
+            fn capabilities(&self) -> Capabilities {
+                Capabilities { generate: true, ..Default::default() }
+            }
+            fn generate(&self, _r: &GenerateRequest) -> Result<GeneratedImage> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                self.cancelled.store(true, Ordering::SeqCst);
+                if self.fail { Err(GenError::Network("failed".into())) } else { Ok(GeneratedImage { bytes: vec![1], mime: "image/png".into() }) }
+            }
+        }
+        let request = GenerateRequest { prompt: "x".into(), aspect: (1, 1), size: ImageSize::Small };
+        for fail in [false, true] {
+            let cancelled = Arc::new(AtomicBool::new(false));
+            let p = Synchronous { cancelled: cancelled.clone(), calls: AtomicUsize::new(0), fail };
+            assert_eq!(p.generate_cancellable(&request, CancelToken::new(|| true)), Err(GenError::Cancelled));
+            assert_eq!(p.calls.load(Ordering::SeqCst), 0);
+            assert_eq!(p.generate_cancellable(&request, CancelToken::new(move || cancelled.load(Ordering::SeqCst))), Err(GenError::Cancelled));
+            assert_eq!(p.calls.load(Ordering::SeqCst), 1);
+        }
     }
 
     #[test]

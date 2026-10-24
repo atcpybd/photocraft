@@ -71,7 +71,7 @@ pub fn mask_png(w: u32, h: u32) -> Vec<u8> {
 }
 
 pub fn edit_request(prompt: &str, w: u32, h: u32) -> EditRequest {
-    EditRequest { image: png(w, h), mask: mask_png(w, h), prompt: prompt.into(), size: ImageSize::Small, ..Default::default() }
+    EditRequest { image: png(w, h), mask: mask_png(w, h), prompt: prompt.into(), size: ImageSize::Small, preserve_source: false, ..Default::default() }
 }
 
 pub fn header<'a>(r: &'a HttpRequest, name: &str) -> Option<&'a str> {

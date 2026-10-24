@@ -120,3 +120,14 @@ The existing Gemini adapter was checked against the current Gemini documentation
 Interactions endpoint, image/text input blocks, `response_format` image sizing and
 `steps[].content[]` image outputs match that protocol. The image/mask prompt is an
 instruction-based edit, since Gemini does not accept a separate native mask parameter.
+
+For provider integrations, call `generate_cancellable(request, cancel)` to forward a
+generation job's cancellation token. The default implementation checks before and
+after a synchronous generation request. ComfyUI overrides it so cancellation during
+queue polling removes that job from the pending queue.
+
+`EditRequest.preserve_source` defaults to `false` for a cleared Generative Fill hole.
+Set it to `true` when source content is retained for AI Seamless Blend or canvas
+expansion. Gemini then asks for mask-guided harmonization or continuation while
+preserving source identity, geometry and all black-mask content. It does not describe
+that retained content as a placeholder to remove.

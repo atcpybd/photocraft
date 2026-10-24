@@ -152,7 +152,8 @@ impl<T: HttpTransport> ImageProvider for GeminiProvider<T> {
         if crate::png_size(&r.mask) != Some(size) {
             return Err(GenError::Invalid("the mask must be a PNG the size of the image".into()));
         }
-        let image = self.request(vec![text(&fill_instruction(&r.prompt)), png(&r.image), png(&r.mask)], size, r.size)?;
+        let instruction = if r.preserve_source { preservation_instruction(&r.prompt) } else { fill_instruction(&r.prompt) };
+        let image = self.request(vec![text(&instruction), png(&r.image), png(&r.mask)], size, r.size)?;
         r.cancel.check()?;
         Ok(image)
     }
@@ -196,6 +197,23 @@ pub fn fill_instruction(prompt: &str) -> String {
          the whole first image: what the scene is, where the light comes from, the perspective and depth, and what runs \
          up to the placeholder. {what} Keep everything in the black area, the framing, the scale and the position of \
          every object exactly as they are. Reply with the edited image only."
+    )
+}
+
+/// Mask-guided harmonization and continuation when the image still contains the source.
+pub fn preservation_instruction(prompt: &str) -> String {
+    let instruction = if prompt.trim().is_empty() {
+        "Harmonize lighting, color and the transition to the surroundings naturally. Continue the surrounding scene through any canvas extension."
+    } else {
+        prompt.trim()
+    };
+    format!(
+        "Edit the first image while preserving its source content. The second image is a mask of the same size: white \
+         marks the only area where harmonization or continuation is permitted, and black marks the area to keep \
+         exactly unchanged. Preserve the identity, geometry, pose, composition, scale and recognizable details of \
+         every source subject. Keep the framing and positions fixed. In the white area, harmonize lighting, color, \
+         texture and transitions as needed; for canvas extensions, continue the existing scene naturally. \
+         Keep all content in the black area exactly unchanged. {instruction} Reply with the edited image only."
     )
 }
 
@@ -307,7 +325,14 @@ mod tests {
     }
 
     fn edit(prompt: &str, w: u32, h: u32) -> EditRequest {
-        EditRequest { image: png_of(w, h), mask: png_of(w, h), prompt: prompt.into(), size: ImageSize::Medium, cancel: CancelToken::default() }
+        EditRequest {
+            image: png_of(w, h),
+            mask: png_of(w, h),
+            prompt: prompt.into(),
+            size: ImageSize::Medium,
+            preserve_source: false,
+            cancel: CancelToken::default(),
+        }
     }
 
     #[test]
@@ -336,6 +361,23 @@ mod tests {
         let empty = fill_instruction("");
         assert!(empty.contains("had never existed") && empty.contains("Do not add a new"), "{empty}");
         assert!(fill_instruction("  a boat. ").contains("placeholder with: a boat."));
+    }
+
+    #[test]
+    fn preserving_edits_request_harmonization_instead_of_replacing_a_placeholder() {
+        let p = provider(vec![Fake::ok(json!({"output_image":{"data":b64(b"fill")}})), Fake::ok(json!({"output_image":{"data":b64(b"blend")}}))]);
+        p.edit(&edit("a boat", 8, 8)).unwrap();
+        p.edit(&EditRequest { preserve_source: true, ..edit("match the lighting", 8, 8) }).unwrap();
+        let sent = p.transport().sent.lock().unwrap();
+        let fill = sent[0].2["input"][0]["text"].as_str().unwrap();
+        let preserve = sent[1].2["input"][0]["text"].as_str().unwrap();
+        assert!(fill.contains("placeholder with: a boat"));
+        assert!(preserve.contains("white") && preserve.contains("black"));
+        assert!(preserve.contains("identity") && preserve.contains("geometry"));
+        assert!(preserve.contains("match the lighting"));
+        assert!(!preserve.to_lowercase().contains("placeholder"));
+        assert!(!preserve.to_lowercase().contains("blur"));
+        assert!(!preserve.to_lowercase().contains("replace"));
     }
 
     #[test]

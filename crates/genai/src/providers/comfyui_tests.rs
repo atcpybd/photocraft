@@ -111,6 +111,20 @@ fn cancellation_deletes_only_own_queued_job_and_timeout_is_bounded() {
 }
 
 #[test]
+fn public_cancellable_generation_deletes_only_its_queued_prompt() {
+    let http = FakeHttp::new(vec![json_reply(200, json!({"prompt_id":"own-job"})), json_reply(200, json!({}))]);
+    let seen = http.clone();
+    let cancel = CancelToken::new(move || !seen.requests().is_empty());
+    let p = provider(config(), http.clone());
+    assert_eq!(p.generate_cancellable(&generated(), cancel), Err(GenError::Cancelled));
+    let sent = http.requests();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[1].url, "http://127.0.0.1:8188/queue");
+    assert_eq!(serde_json::from_slice::<Value>(&sent[1].body).unwrap(), json!({"delete":["own-job"]}));
+    assert!(sent.iter().all(|r| !r.url.ends_with("/interrupt")));
+}
+
+#[test]
 fn failed_jobs_bad_replies_and_output_paths_are_safe_errors() {
     for reply in [
         json_reply(200, json!({"job-1":{"status":{"completed":true,"status_str":"error"}}})),

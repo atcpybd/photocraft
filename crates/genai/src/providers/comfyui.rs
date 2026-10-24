@@ -235,7 +235,10 @@ impl ImageProvider for ComfyUi {
         Capabilities { generate: true, edit: self.image.is_some() && self.mask.is_some(), variations: false }
     }
     fn generate(&self, r: &GenerateRequest) -> Result<GeneratedImage> {
-        self.run(&r.prompt, None, &CancelToken::default(), &SystemClock::new(), crate::poll::LIMIT)
+        self.generate_cancellable(r, CancelToken::default())
+    }
+    fn generate_cancellable(&self, r: &GenerateRequest, cancel: CancelToken) -> Result<GeneratedImage> {
+        self.run(&r.prompt, None, &cancel, &SystemClock::new(), crate::poll::LIMIT)
     }
     fn edit(&self, r: &EditRequest) -> Result<GeneratedImage> {
         if !self.capabilities().edit {

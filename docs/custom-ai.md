@@ -10,7 +10,7 @@ Extract the portable ZIP to a writable folder and open PhotoCraft-Custom-AI.exe.
 
 Open Edit > Preferences > Generative AI Settings. Select Set Up for a provider, enter its settings, save, then choose it as the default.
 
-- OpenAI-compatible image service: enter the API base URL (including /v1 where required), image model name and API key. The service must implement Images generation and/or multipart image editing. A chat-only endpoint cannot generate images. Capabilities can be disabled for services that only implement one operation.
+- OpenAI-compatible image service: enter the API base URL (including /v1 where required), image model name and API key. The service must implement Images generation and/or multipart image editing. A chat-only endpoint cannot generate images. Capabilities can be disabled for services that only implement one operation. Use this entry for OpenAI text-to-image generation; the separate OpenAI GPT Image entry is the inherited masked-fill adapter.
 - Google Gemini: enter an image-capable Gemini model and API key. Other built-in fill adapters are also available; only their supported operations are enabled.
 - ComfyUI workflow: start your own ComfyUI server, normally http://127.0.0.1:8188. Paste an API-format workflow (not the editor's ordinary workflow export), then map the prompt, optional seed, image and mask inputs and the output node. Both image and mask mappings are required for editing. Choose the actual checkpoint installed on your server. Examples are in ComfyUI examples/. Choose the generation, inpaint or blend example to match the operation and replace the configured workflow when switching between them. No models or server are installed by this app.
 
